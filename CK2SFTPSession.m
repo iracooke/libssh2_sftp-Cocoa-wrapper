@@ -1010,21 +1010,29 @@ static void kbd_callback(const char *name, int name_len,
     NSParameterAssert(challenge == _challenge);
     [_challenge autorelease]; _challenge = nil; // autorelease so can use for duration of method
     
-    
     if ([credential ck2_isPublicKeyCredential])
     {
         NSError *error;
         if (![self usePublicKeyCredential:credential error:&error])
         {
-            _challenge = [[NSURLAuthenticationChallenge alloc]
-                          initWithProtectionSpace:[challenge protectionSpace]
-                          proposedCredential:credential
-                          previousFailureCount:([challenge previousFailureCount] + 1)
-                          failureResponse:nil
-                          error:error
-                          sender:self];
+            // We may have been disconnected after attempting to authenticate.
+            // A failWithError and a didCancelAuthentication message will have
+            // been sent to the delegate but we need to avoid any calls to libssh2 
+            // functions when our _session variable is nil
+            //
+            if (_session) { 
+                _challenge = [[NSURLAuthenticationChallenge alloc]
+                              initWithProtectionSpace:[challenge protectionSpace]
+                              proposedCredential:credential
+                              previousFailureCount:([challenge previousFailureCount] + 1)
+                              failureResponse:nil
+                              error:error
+                              sender:self];
             
-            [self sendAuthenticationChallenge];
+                [self sendAuthenticationChallenge];
+            } else {
+                return;
+            }
         }
     }
     else
@@ -1036,6 +1044,8 @@ static void kbd_callback(const char *name, int name_len,
             [self failWithError:[self sessionError]];
         }
         
+        // We may have been disconnected. See comments above.
+        if (!_session) return;
         
         // Use Keyboard-Interactive auth only if forced to
         int rc;
