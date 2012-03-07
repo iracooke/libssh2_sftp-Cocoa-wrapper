@@ -380,7 +380,7 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     }
     
     [buffer release];
-
+    
     return result;
 }
 
@@ -394,63 +394,10 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     return [self resolveSymlink:@"." complex:YES error:error];
 }
 
-
-#pragma mark Symbolic Links
-
-- (NSString*) destinationOfSymbolicLinkAtPath:(NSString*)linkPath error:(NSError**)error {
-    
-    NSMutableData *buffer = [[NSMutableData alloc] initWithLength:256];
-                        
-    int targetLen = libssh2_sftp_readlink(_sftp, [linkPath UTF8String], [buffer mutableBytes] , [buffer length]);
-    
-    while (targetLen==LIBSSH2_ERROR_BUFFER_TOO_SMALL){
-        [buffer increaseLengthBy:[buffer length]];
-        targetLen = libssh2_sftp_readlink(_sftp, [linkPath UTF8String], [buffer mutableBytes] , [buffer length]);
-    }
-    
-    NSString *targetName=nil;
-    if ( targetLen < 0 ){ // An error
-            if ( error ) *error = [self sessionError];
-    } else {
-    
-        targetName = [[[NSString alloc] initWithBytes:[buffer bytes]
-                                                    length:targetLen
-                                                  encoding:NSUTF8StringEncoding] autorelease];
-        
-        // Need to turn the target into an absolute path
-        //
-        if ( ![targetName isAbsolutePath] ){
-            targetName=[[NSString stringWithFormat:@"%@/%@",[linkPath stringByDeletingLastPathComponent],targetName] stringByStandardizingPath];
-        }
-        
-        // Need to determine if target is a directory or not and append a slash accordingly
-        //
-        LIBSSH2_SFTP_ATTRIBUTES attributes;
-        int ret = libssh2_sftp_stat(_sftp,[targetName UTF8String], &attributes);
-        if ( ret ==0 ){
-                        
-            if ( LIBSSH2_SFTP_S_ISDIR(attributes.permissions) ){
-                if ( ![targetName hasSuffix:@"/"] )
-                    targetName=[NSString stringWithFormat:@"%@/",targetName];
-            }
-        } else {
-            // Error getting file attributes
-            if ( error ) *error = [self sessionError];
-        }
-    
-     }
-    
-    [buffer release];
-    
-    return targetName;
-
-}
-
 #pragma mark Directories
 
 // Keep compatibility with CK without having to link to it
 #define cxFilenameKey @"cxFilenameKey"
-#define cxSymbolicLinkTargetKey @"cxSymbolicLinkTargetKey"
 
 - (NSArray *)contentsOfDirectoryAtPath:(NSString *)path error:(NSError **)error;
 {
@@ -487,24 +434,36 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
             // Exclude . and .. as they're not Cocoa-like
             if (![filename isEqualToString:@"."] && ![filename isEqualToString:@".."])
             {
-                
-                if ( LIBSSH2_SFTP_S_ISLNK(attributes.permissions) ){ 
-                    [result addObject:[NSDictionary dictionaryWithObjectsAndKeys:
-                                        filename, cxFilenameKey,
-                                        NSFileTypeSymbolicLink,NSFileType,
-                                        nil]];
-                    
-                } else {                
-                    NSString *type = (attributes.permissions & LIBSSH2_SFTP_S_IFDIR ?
-                                  NSFileTypeDirectory :
-                                  NSFileTypeRegular);
-                    [result addObject:[NSDictionary dictionaryWithObjectsAndKeys:
-                                       filename, cxFilenameKey,
-                                       type, NSFileType,
-                                       nil]];
+                NSString *type = NSFileTypeUnknown;
+                if (LIBSSH2_SFTP_S_ISREG(attributes.permissions))
+                {
+                    type = NSFileTypeRegular;
+                }
+                else if (LIBSSH2_SFTP_S_ISDIR(attributes.permissions))
+                {
+                    type = NSFileTypeDirectory;
+                }
+                else if (LIBSSH2_SFTP_S_ISLNK(attributes.permissions))
+                {
+                    type = NSFileTypeSymbolicLink;
+                }
+                else if (LIBSSH2_SFTP_S_ISSOCK(attributes.permissions))
+                {
+                    type = NSFileTypeSocket;
+                }
+                else if (LIBSSH2_SFTP_S_ISCHR(attributes.permissions))
+                {
+                    type = NSFileTypeCharacterSpecial;
+                }
+                else if (LIBSSH2_SFTP_S_ISBLK(attributes.permissions))
+                {
+                    type = NSFileTypeBlockSpecial;
                 }
                 
-
+                [result addObject:[NSDictionary dictionaryWithObjectsAndKeys:
+                                   filename, cxFilenameKey,
+                                   type, NSFileType,
+                                   nil]];
             }
             
             [filename release];
@@ -649,7 +608,6 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
         if (error) *error = [self sessionErrorWithPath:oldPath];
         return NO;
     }    
-
 }
 
 #pragma mark Host Fingerprint
@@ -1144,7 +1102,6 @@ static void kbd_callback(const char *name, int name_len,
 
     [self cancel];
 }
-
 
 #pragma mark Low-level
 
