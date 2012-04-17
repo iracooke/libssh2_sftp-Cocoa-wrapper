@@ -73,6 +73,7 @@ extern NSString *const CK2SSHAuthenticationSchemePassword;
 
 // Returns an array of dictionaries, one per directory item, with the same keys as NSFileManager uses, but with the addition of cxFilenameKey
 - (NSArray *)attributesOfContentsOfDirectoryAtPath:(NSString *)path error:(NSError **)error;
+- (NSDictionary *)attributesOfItemAtPath:(NSString *)path error:(NSError **)error;
 
 - (BOOL)createDirectoryAtPath:(NSString *)path mode:(long)mode error:(NSError **)error;
 - (BOOL)createDirectoryAtPath:(NSString *)path withIntermediateDirectories:(BOOL)createIntermediates mode:(long)mode error:(NSError **)error;

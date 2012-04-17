@@ -407,6 +407,35 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     return [[self attributesOfContentsOfDirectoryAtPath:path error:error] valueForKey:cxFilenameKey];
 }
 
+- (NSString*) fileTypeFromSFTPAttributes:(LIBSSH2_SFTP_ATTRIBUTES)attributes{
+    NSString *type = NSFileTypeUnknown;
+    if (LIBSSH2_SFTP_S_ISREG(attributes.permissions))
+    {
+        type = NSFileTypeRegular;
+    }
+    else if (LIBSSH2_SFTP_S_ISLNK(attributes.permissions))
+    {
+        type = NSFileTypeSymbolicLink;
+    }
+    else if (LIBSSH2_SFTP_S_ISDIR(attributes.permissions))
+    {
+        type = NSFileTypeDirectory;
+    }
+    else if (LIBSSH2_SFTP_S_ISSOCK(attributes.permissions))
+    {
+        type = NSFileTypeSocket;
+    }
+    else if (LIBSSH2_SFTP_S_ISCHR(attributes.permissions))
+    {
+        type = NSFileTypeCharacterSpecial;
+    }
+    else if (LIBSSH2_SFTP_S_ISBLK(attributes.permissions))
+    {
+        type = NSFileTypeBlockSpecial;
+    }
+    return type;
+}
+
 - (NSArray *)attributesOfContentsOfDirectoryAtPath:(NSString *)path error:(NSError **)error;
 {
     LIBSSH2_SFTP_HANDLE *handle = libssh2_sftp_opendir(_sftp, [path UTF8String]);
@@ -437,31 +466,7 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
             // Exclude . and .. as they're not Cocoa-like
             if (![filename isEqualToString:@"."] && ![filename isEqualToString:@".."])
             {
-                NSString *type = NSFileTypeUnknown;
-                if (LIBSSH2_SFTP_S_ISREG(attributes.permissions))
-                {
-                    type = NSFileTypeRegular;
-                }
-                else if (LIBSSH2_SFTP_S_ISDIR(attributes.permissions))
-                {
-                    type = NSFileTypeDirectory;
-                }
-                else if (LIBSSH2_SFTP_S_ISLNK(attributes.permissions))
-                {
-                    type = NSFileTypeSymbolicLink;
-                }
-                else if (LIBSSH2_SFTP_S_ISSOCK(attributes.permissions))
-                {
-                    type = NSFileTypeSocket;
-                }
-                else if (LIBSSH2_SFTP_S_ISCHR(attributes.permissions))
-                {
-                    type = NSFileTypeCharacterSpecial;
-                }
-                else if (LIBSSH2_SFTP_S_ISBLK(attributes.permissions))
-                {
-                    type = NSFileTypeBlockSpecial;
-                }
+                NSString *type = [self fileTypeFromSFTPAttributes:attributes];
                 
                 [result addObject:[NSDictionary dictionaryWithObjectsAndKeys:
                                    filename, cxFilenameKey,
@@ -483,6 +488,22 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     libssh2_sftp_closedir(handle);
     return result;
 }
+
+
+- (NSDictionary *)attributesOfItemAtPath:(NSString *)path error:(NSError **)error {
+
+    LIBSSH2_SFTP_ATTRIBUTES attrs;
+    const char *pathChar = [path UTF8String];
+    int result=libssh2_sftp_stat_ex(_sftp, pathChar, strlen(pathChar), LIBSSH2_SFTP_LSTAT, &attrs);
+    
+    if ( result == 0 ){
+        return [NSDictionary dictionaryWithObjectsAndKeys:path, cxFilenameKey,[self fileTypeFromSFTPAttributes:attrs],NSFileType, nil];
+    } else {
+        if (error) *error = [self sessionErrorWithPath:path];
+        return nil;
+    }
+}
+
 
 - (BOOL)createDirectoryAtPath:(NSString *)path mode:(long)mode error:(NSError **)error;
 {
