@@ -22,13 +22,6 @@
 
 @implementation CK2SSHCredential
 
-- (void)dealloc
-{
-    [_publicKey release];
-    [_privateKey release];
-    
-    [super dealloc];
-}
 
 - (BOOL)ck2_isPublicKeyCredential; { return YES; }
 
@@ -73,11 +66,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    [_service release];
-    [super dealloc];
-}
 
 - (NSString *)password
 {
@@ -95,7 +83,7 @@
     
     SecKeychainItemFreeContent(NULL, password);
     
-    return [result autorelease];
+    return result;
 }
 
 - (BOOL)hasPassword { return YES; }
@@ -114,7 +102,7 @@
     CK2SSHCredential *result = [[CK2SSHCredential alloc] initWithUser:user
                                                              password:nil
                                                           persistence:NSURLCredentialPersistenceNone];
-    return [result autorelease];
+    return result;
 }
 
 + (NSURLCredential *)ck2_credentialWithUser:(NSString *)user
@@ -131,7 +119,7 @@
     
     [result setPublicKeyURL:publicKey privateKeyURL:privateKey];
     
-    return [result autorelease];
+    return result;
 }
 
 + (NSURLCredential *)ck2_credentialWithUser:(NSString *)user
@@ -150,7 +138,7 @@
     
     if (status != noErr) return nil;
     
-    return [[[CK2GenericPasswordCredential alloc] initWithUser:user service:service] autorelease];
+    return [[CK2GenericPasswordCredential alloc] initWithUser:user service:service];
 }
 
 - (BOOL)ck2_isPublicKeyCredential; { return NO; }

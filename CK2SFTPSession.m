@@ -103,7 +103,7 @@ static int waitsocket(int socket_fd, LIBSSH2_SESSION *session)
 
 void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *message, int message_len, const char *language, int language_len, void **abstract)
 {
-    CK2SFTPSession *self = *abstract;
+    CK2SFTPSession *self = (__bridge CK2SFTPSession*)*abstract;
     
     // Build a raw error to encapsulate the disconnect
     NSMutableDictionary *userInfo = [[NSMutableDictionary alloc] initWithCapacity:2];
@@ -111,17 +111,14 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     {
         NSString *string = [[NSString alloc] initWithBytes:message length:message_len encoding:NSUTF8StringEncoding];
         [userInfo setObject:string forKey:NSLocalizedDescriptionKey];
-        [string release];
     }
     if (language)
     {
         NSString *string = [[NSString alloc] initWithBytes:language length:language_len encoding:NSUTF8StringEncoding];
         [userInfo setObject:string forKey:@"language"];
-        [string release];
     }
     
     NSError *error = [NSError errorWithDomain:CK2SSHDisconnectErrorDomain code:reason userInfo:userInfo];
-    [userInfo release];
     
     [self failWithError:error];
 }
@@ -150,7 +147,7 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     
     
     /* Create a session instance */
-    _session = libssh2_session_init_ex(NULL, NULL, NULL, self);
+    _session = libssh2_session_init_ex(NULL, NULL, NULL, (__bridge void *)(self));
     if (!_session)
     {
         NSError *error = [NSError errorWithDomain:CK2LibSSH2ErrorDomain
@@ -240,7 +237,6 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
             [userInfo setObject:error forKey:NSUnderlyingErrorKey];
             
             error = [NSError errorWithDomain:[error domain] code:[error code] userInfo:userInfo];
-            [userInfo release];
         }
         
         // Normally when tearing down after an error, the session is disconnected. For some scenarios that triggers a SIGPIPE since the session was never started up successfully, so do our own teardown here to avoid that. #169357
@@ -263,10 +259,10 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     if (_challenge)
     {
         [_delegate SFTPSession:self didCancelAuthenticationChallenge:_challenge];
-        [_challenge release]; _challenge = nil;
+         _challenge = nil;
     }
     
-    [_URL release]; _URL = nil;
+     _URL = nil;
     
     libssh2_sftp_shutdown(_sftp); _sftp = NULL;
     
@@ -297,7 +293,6 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
 - (void)dealloc
 {
     [self cancel];  // performs all teardown of ivars
-    [super dealloc];
 }
 
 #pragma mark Error Handling
@@ -318,7 +313,6 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
                                                 description, NSLocalizedDescriptionKey,
                                                 path, NSFilePathErrorKey,
                                                 nil]];
-    [description release];
     
     
     if (code == LIBSSH2_ERROR_SFTP_PROTOCOL)
@@ -369,9 +363,9 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
     NSString *result = nil;
     if ( pathLength >= 0 )
     {
-        result = [[[NSString alloc] initWithBytes:[buffer bytes]
+        result = [[NSString alloc] initWithBytes:[buffer bytes]
                                            length:pathLength
-                                         encoding:NSUTF8StringEncoding] autorelease];
+                                         encoding:NSUTF8StringEncoding];
     }
     else
     {
@@ -382,7 +376,6 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
         }
     }
     
-    [buffer release];
     
     return result;
 }
@@ -474,7 +467,6 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
                                    nil]];
             }
             
-            [filename release];
         }
     }
     while (filenameLength > 0);
@@ -586,7 +578,7 @@ void disconnect_callback(LIBSSH2_SESSION *session, int reason, const char *messa
         return nil;
     }
     
-    return [[[CK2SFTPFileHandle alloc] initWithSFTPHandle:handle session:self path:path] autorelease];
+    return [[CK2SFTPFileHandle alloc] initWithSFTPHandle:handle session:self path:path];
 }
 
 - (BOOL)removeFileAtPath:(NSString *)path error:(NSError **)error;
@@ -796,7 +788,7 @@ static void kbd_callback(const char *name, int name_len,
                          LIBSSH2_USERAUTH_KBDINT_RESPONSE *responses,
                          void **abstract)
 {
-    CK2SFTPSession *self = *abstract;    // was provided when session initialized
+    CK2SFTPSession *self = (__bridge CK2SFTPSession*)*abstract;    // was provided when session initialized
         
     
     // Append prompts to transcript
@@ -805,7 +797,6 @@ static void kbd_callback(const char *name, int name_len,
     {
         NSString *aPrompt = [[NSString alloc] initWithBytes:prompts[i].text length:prompts[i].length encoding:NSUTF8StringEncoding];
         [self->_delegate SFTPSession:self appendStringToTranscript:aPrompt received:YES];
-        [aPrompt release];
     }
     
     
@@ -863,7 +854,6 @@ static void kbd_callback(const char *name, int name_len,
                   failureResponse:nil
                   error:nil
                   sender:self];
-    [protectionSpace release];
     
     [self sendAuthenticationChallenge];        
 }
@@ -902,7 +892,6 @@ static void kbd_callback(const char *name, int name_len,
     
     NSString *supportedAuthSchemes = [[NSString alloc] initWithCString:userauthlist encoding:NSUTF8StringEncoding];
     NSArray *result = [supportedAuthSchemes componentsSeparatedByString:@","];
-    [supportedAuthSchemes release];
     return result;
 }
 
@@ -922,7 +911,6 @@ static void kbd_callback(const char *name, int name_len,
     [sshAgentTask setStandardInput:[NSPipe pipe]];  // so xcode doesn't start prompting for passphrase!
     [sshAgentTask launch];
     [sshAgentTask waitUntilExit];
-    [sshAgentTask release];
     
     
     if (libssh2_agent_connect(agent) != LIBSSH2_ERROR_NONE)
@@ -1032,7 +1020,6 @@ static void kbd_callback(const char *name, int name_len,
 {
     NSParameterAssert(challenge);
     NSParameterAssert(challenge == _challenge);
-    [_challenge autorelease]; _challenge = nil; // autorelease so can use for duration of method
     
     if ([credential ck2_isPublicKeyCredential])
     {
@@ -1123,7 +1110,7 @@ static void kbd_callback(const char *name, int name_len,
 {
     NSParameterAssert(challenge);
     NSParameterAssert(challenge == _challenge);
-    [_challenge release]; _challenge = nil;
+     _challenge = nil;
     
     [self initializeSFTP];
 }
@@ -1132,7 +1119,7 @@ static void kbd_callback(const char *name, int name_len,
 {
     NSParameterAssert(challenge);
     NSParameterAssert(challenge == _challenge);
-    [_challenge release]; _challenge = nil;
+     _challenge = nil;
 
     [self cancel];
 }
@@ -1153,7 +1140,7 @@ static void kbd_callback(const char *name, int name_len,
 
 /*	NSURLProtectionSpace is immutable. It probably implements -copyWithZone: in the exact same way we do, but have no guarantee, so re-implement here.
  */
-- (id)copyWithZone:(NSZone *)zone { return [self retain]; }
+- (id)copyWithZone:(NSZone *)zone { return self; }
 
 @end
 

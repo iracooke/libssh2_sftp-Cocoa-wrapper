@@ -20,7 +20,7 @@
     if (self = [self init])
     {
         _handle = handle;
-        _session = [session retain];
+        _session = session;
         _path = [path copy];
     }
     
@@ -39,7 +39,7 @@
         if (result)
         {
             _handle = NULL;
-            [_session release]; _session = nil;
+             _session = nil;
         }
         else if (error)
         {
@@ -53,11 +53,9 @@
 - (void)dealloc;
 {
     [self closeFile];
-    [_session release]; _session = nil; // just in case closing failed
+     _session = nil; // just in case closing failed
     
-    [_path release];
     
-    [super dealloc];
 }
 
 - (void)writeData:(NSData *)data;
